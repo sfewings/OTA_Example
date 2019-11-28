@@ -1,0 +1,11 @@
+{
+    "python.linting.enabled": true,
+    "python.jediEnabled": false,
+
+    // Loaded Stubs:  pyboard-1.11.0 
+    "python.autoComplete.extraPaths": [".micropy\\Stephen-micropy-stubs-Pyboard\\frozen", ".micropy\\Stephen-micropy-stubs-Pyboard\\stubs", ".micropy\\GeckoHardware"],
+    "python.autoComplete.typeshedPaths":  [".micropy\\Stephen-micropy-stubs-Pyboard\\frozen", ".micropy\\Stephen-micropy-stubs-Pyboard\\stubs", ".micropy\\GeckoHardware"],
+    "python.analysis.typeshedPaths":  [".micropy\\Stephen-micropy-stubs-Pyboard\\frozen", ".micropy\\Stephen-micropy-stubs-Pyboard\\stubs", ".micropy\\GeckoHardware"],
+
+    "python.linting.pylintEnabled": true
+}
