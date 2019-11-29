@@ -31,17 +31,32 @@ ROUTES = [
 
 app = picoweb.WebApp(__name__, ROUTES)
 
+OTAupdateTextList = []
+
 
 @app.route("/CheckForUpdates")
 def CheckForUpdates(req, resp):
-    o = OTAUpdater("https://github.com/sfewings/OTA_Example",main_dir=".")
-    o.check_for_update_to_install_during_next_reboot()
-    
+    global OTAupdateTextList
+    OTAupdateTextList = []
+    OTAupdateTextList.append("def CheckForUpdates(req, resp):")
+    yield from app.sendfile(resp, 'static/Example.html')
+    o = OTAUpdater("https://github.com/sfewings/OTA_Example",main_dir="main", OTAupdateTextList=OTAupdateTextList)
+    o.check_for_update_to_install_during_next_reboot( )
     
 @app.route("/InstallUpdates")
-def installUpdates(req,resp):
-    o = OTAUpdater("https://github.com/sfewings/OTA_Example",main_dir=".")
-    o.download_and_install_update_if_available("","")
+def installUpdates(req, resp):
+    global OTAupdateTextList
+    OTAupdateTextList = []
+    OTAupdateTextList.append("def installUpdates(req, resp):")
+    yield from app.sendfile(resp, 'static/Example.html')
+    o = OTAUpdater("https://github.com/sfewings/OTA_Example",main_dir="main", OTAupdateTextList=OTAupdateTextList)
+    o.download_and_install_update_if_available("", "")
+
+ 
+@app.route("/get_OTA_updateText")
+def get_OTA_updateText(req, resp):
+    global OTAupdateTextList
+    yield from resp.awrite("<p>{}</p>".format("</p><p>".join( OTAupdateTextList)))
 
 
 @app.route("/source")
@@ -50,7 +65,7 @@ def source(req, resp):
 
 #### Parsing function
 
-def GetIP() :
+def GetIP():
     connections = [("PS_House","pennington2017"),("ZORAN","zoransoft"), ("ZORAN_EXT","zoransoft")]
     sta_if = network.WLAN(network.STA_IF)
     sta_if.active(True)

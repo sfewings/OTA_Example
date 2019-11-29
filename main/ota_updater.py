@@ -5,18 +5,24 @@ import usocket
 import os
 import gc
 import machine
-
+import ulogging
+import utime        #support logging exception time reporting
 
 class OTAUpdater:
 
-    def __init__(self, github_repo, module='', main_dir='main'):
+    def __init__(self, github_repo, module='', main_dir='main', OTAupdateTextList= []):
         self.http_client = HttpClient()
         self.github_repo = github_repo.rstrip('/').replace('https://github.com', 'https://api.github.com/repos')
         self.main_dir = main_dir
         self.module = module.rstrip('/')
 
+        self.log = ulogging.getLogger("OTA updater")
+        self.log.setLevel(ulogging.DEBUG)
+        self.OTAupdateTextList = OTAupdateTextList
+
+
     @staticmethod
-    def using_network(ssid, password):
+    def using_network(ssid="", password=""):
         import network
         sta_if = network.WLAN(network.STA_IF)
         if not sta_if.isconnected():
@@ -27,62 +33,79 @@ class OTAUpdater:
                 pass
         print('network config:', sta_if.ifconfig())
 
+    def OTA_print(self, text):
+        print(text)
+        self.OTAupdateTextList.append(text)
+
+
     def check_for_update_to_install_during_next_reboot(self):
         current_version = self.get_version(self.modulepath(self.main_dir))
         latest_version = self.get_latest_version()
 
-        print('Checking version... ')
-        print('\tCurrent version: ', current_version)
-        print('\tLatest version: ', latest_version)
+        self.OTA_print('Checking version... ')
+        self.OTA_print('\tCurrent version: {}'.format( current_version ))
+        self.OTA_print('\tLatest version: {}'.format( latest_version ))
         if latest_version > current_version:
-            print('New version available, will download and install on next reboot')
-            os.mkdir(self.modulepath('next'))
+            self.OTA_print('New version available, will download and install on next reboot')
+            try:
+                os.mkdir(self.modulepath('next'))
+            except OSError as e:
+                self.OTA_print("Unable to create path {}\\next".format(self.modulepath(self.main_dir)))
+                #self.log.exc(e, "%.3f %s %r" % (utime.time(), "Unable to create path {}\\next".format(self.modulepath(self.main_dir)), e))
+
             with open(self.modulepath('next/.version_on_reboot'), 'w') as versionfile:
                 versionfile.write(latest_version)
                 versionfile.close()
+        else:
+            self.OTA_print('Already have the latest version. No update required')          
 
     def download_and_install_update_if_available(self, ssid, password):
         if 'next' in os.listdir(self.module):
             if '.version_on_reboot' in os.listdir(self.modulepath('next')):
                 latest_version = self.get_version(self.modulepath('next'), '.version_on_reboot')
-                print('New update found: ', latest_version)
+                self.OTA_print('New update found: {} '.format(latest_version) )
                 self._download_and_install_update(latest_version, ssid, password)
         else:
-            print('No new updates found...')
+            self.OTA_print('No new updates found...')
 
     def _download_and_install_update(self, latest_version, ssid, password):
         OTAUpdater.using_network(ssid, password)
 
         self.download_all_files(self.github_repo + '/contents/' + self.main_dir, latest_version)
-        self.rmtree(self.modulepath(self.main_dir))
+        if 'OTABackup' in os.listdir(self.module):
+            self.rmtree(self.modulepath("OTABackup"))
+        try:
+            os.rename(self.modulepath(self.main_dir), self.modulepath('OTABackup'))
+        except OSError as e:
+            self.OTA_print("Unable to rename \\{} as \\OTABackup".format(self.main_dir))
         os.rename(self.modulepath('next/.version_on_reboot'), self.modulepath('next/.version'))
         os.rename(self.modulepath('next'), self.modulepath(self.main_dir))
-        print('Update installed (', latest_version, '), will reboot now')
-        machine.reset()
+        self.OTA_print('Update installed ( {} ), will reboot now'.format(latest_version) )
+        #machine.reset()
 
     def apply_pending_updates_if_available(self):
         if 'next' in os.listdir(self.module):
             if '.version' in os.listdir(self.modulepath('next')):
                 pending_update_version = self.get_version(self.modulepath('next'))
-                print('Pending update found: ', pending_update_version)
+                self.OTA_print('Pending update found: {}'.format( pending_update_version) )
                 self.rmtree(self.modulepath(self.main_dir))
                 os.rename(self.modulepath('next'), self.modulepath(self.main_dir))
-                print('Update applied (', pending_update_version, '), ready to rock and roll')
+                self.OTA_print('Update applied ( {} ), ready to rock and roll'.format(pending_update_version))
             else:
-                print('Corrupt pending update found, discarding...')
+                self.OTA_print('Corrupt pending update found, discarding...')
                 self.rmtree(self.modulepath('next'))
         else:
-            print('No pending update found')
+            self.OTA_print('No pending update found')
 
     def download_updates_if_available(self):
         current_version = self.get_version(self.modulepath(self.main_dir))
         latest_version = self.get_latest_version()
 
-        print('Checking version... ')
-        print('\tCurrent version: ', current_version)
-        print('\tLatest version: ', latest_version)
+        self.OTA_print('Checking version... ')
+        self.OTA_print('\tCurrent version: {}'.format(current_version))
+        self.OTA_print('\tLatest version:  {}'.format( latest_version) )
         if latest_version > current_version:
-            print('Updating...')
+            self.OTA_print('Updating...')
             os.mkdir(self.modulepath('next'))
             self.download_all_files(self.github_repo + '/contents/' + self.main_dir, latest_version)
             with open(self.modulepath('next/.version'), 'w') as versionfile:
@@ -103,17 +126,26 @@ class OTAUpdater:
         os.rmdir(directory)
 
     def get_version(self, directory, version_file_name='.version'):
-        if version_file_name in os.listdir(directory):
-            f = open(directory + '/' + version_file_name)
-            version = f.read()
-            f.close()
-            return version
+        try:
+            if version_file_name in os.listdir(directory):
+                f = open(directory + '/' + version_file_name)
+                version = f.read()
+                f.close()
+                return version
+        except OSError as e:
+            self.OTA_print("Unable to create path get current {} from {}. Assuming version 0.0. {}".format(version_file_name, directory, e))
         return '0.0'
 
     def get_latest_version(self):
+        #print(self.github_repo + '/releases/latest')
         latest_release = self.http_client.get(self.github_repo + '/releases/latest')
-        version = latest_release.json()['tag_name']
-        latest_release.close()
+        #print(latest_release)
+        try:
+            version = latest_release.json()['tag_name']
+        except KeyError:
+            version = '0.0'
+        finally:
+            latest_release.close()
         return version
 
     def download_all_files(self, root_url, version):
@@ -131,7 +163,7 @@ class OTAUpdater:
         file_list.close()
 
     def download_file(self, url, path):
-        print('\tDownloading: ', path)
+        self.OTA_print('\tDownloading: {}'.format( path ) )
         with open(path, 'w') as outfile:
             try:
                 response = self.http_client.get(url)
@@ -231,7 +263,7 @@ class HttpClient:
                 s.write(data)
 
             l = s.readline()
-            # print(l)
+            #print("received:"+str(l))
             l = l.split(None, 2)
             status = int(l[1])
             reason = ''
@@ -241,7 +273,7 @@ class HttpClient:
                 l = s.readline()
                 if not l or l == b'\r\n':
                     break
-                # print(l)
+                #print("received:"+str(l))
                 if l.startswith(b'Transfer-Encoding:'):
                     if b'chunked' in l:
                         raise ValueError('Unsupported ' + l)
