@@ -103,7 +103,7 @@ class OTAUpdater:
 
         self.OTA_print('Checking version... ')
         self.OTA_print('\tCurrent version: {}'.format(current_version))
-        self.OTA_print('\tLatest version:  {}'.format( latest_version) )
+        self.OTA_print('\tLatest version:  {}'.format(latest_version))
         if latest_version > current_version:
             self.OTA_print('Updating...')
             os.mkdir(self.modulepath('next'))
@@ -163,7 +163,7 @@ class OTAUpdater:
         file_list.close()
 
     def download_file(self, url, path):
-        self.OTA_print('\tDownloading: {}'.format( path ) )
+        self.OTA_print('\tDownloading: {}'.format(path))
         with open(path, 'w') as outfile:
             try:
                 response = self.http_client.get(url)
